@@ -3,8 +3,13 @@ from datetime import date
 import os
 
 # --- Telegram ayarları ---
-TOKEN = "8153163023:AAF6TyciGLkjCmr8oXq1hQEO50ahMsGpRmA"
-CHAT_ID = "1642459289"
+#TOKEN = "8153163023:AAF6TyciGLkjCmr8oXq1hQEO50ahMsGpRmA"
+#CHAT_ID = "1642459289"
+
+# --- Telegram ayarları ---
+# GitHub Actions'ta secrets kullan
+TOKEN = os.environ.get("TELEGRAM_TOKEN", "8153163023:AAF6TyciGLkjCmr8oXq1hQEO50ahMsGpRmA")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1642459289")
 
 def send_telegram(message):
     """Telegram mesajı gönder"""
@@ -96,6 +101,8 @@ if response.status_code == 200:
         set_last_count(new_count)
     else:
         # hiç değişiklik yok
+ message = f"📢 değişiklik yok"
+            send_telegram(message)
         print("Yeni bildirim yok, telegrama mesaj gönderilmedi.")
 else:
     send_telegram(f"KAP verisi alınamadı! Status Code: {response.status_code}")
