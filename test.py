@@ -91,7 +91,9 @@ if response.status_code == 200:
             stock = item.get("stockCodes") or item.get("relatedStocks") or ""
             title = item.get("summary") or ""
             summary = item.get("subject") or ""
-            message = f"📢 {stock}\n🔹 {title}\n📄 {summary}"
+            bildirimNo = item.get("disclosureIndex") or ""
+            link = f"https://www.kap.org.tr/tr/Bildirim/{bildirimNo}"
+            message = f"📢 {stock}\n\n🔹 {title}\n\n📄 {summary} \n\n 🔗 {link}"
             send_telegram(message)
 
         # sayıyı güncelle
