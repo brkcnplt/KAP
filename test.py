@@ -93,7 +93,7 @@ if response.status_code == 200:
             summary = item.get("subject") or ""
             bildirimNo = item.get("disclosureIndex") or ""
             link = f"https://www.kap.org.tr/tr/Bildirim/{bildirimNo}"
-            message = f"📢 {stock}\n\n🔹 {title}\n\n📄 {summary} \n\n 🔗 <a href='{link}'>Bildirimi Görüntüle</a>""
+            message = f"📢 {stock}\n\n🔹 {title}\n\n📄 {summary} \n\n 🔗 <a href='{link}'>Bildirimi Görüntüle</a>"
             send_telegram(message)
 
         # sayıyı güncelle
