@@ -23,7 +23,7 @@ def set_last_count(count):
         f.write(str(count))
 
 # --- KAP verisi çekme ---
-today = date.today().strftime("%Y-%m-%d")
+today = date.yesterday().strftime("%Y-%m-%d")
 url = "https://www.kap.org.tr/tr/api/disclosure/members/byCriteria"
 
 payload = {
