@@ -78,6 +78,7 @@ if response.status_code == 200:
     data = response.json() or []
     new_count = len(data)
     last_count = get_last_count()
+    new_count = last_count + 1 #will be change
     print(f"Yeni KAP bildirimi sayısı: {new_count}, Son kayıtlı bildirim sayısı: {last_count}")
 
     if new_count == 0:
