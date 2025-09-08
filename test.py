@@ -1,5 +1,5 @@
 import requests
-from datetime import date
+from datetime import date, datetime
 import os
 import yfinance as yf
 
@@ -23,20 +23,25 @@ def get_xu100():
     return "XU100 verisi alınamadı"
 
 def get_stockValue(stockName):
-    ticker = yf.Ticker(f"{stockName}.IS")
-    data = ticker.history(period="1d", interval="1m")
-    if not data.empty:
-        last_price = data["Close"].iloc[-1]
-        prev_close = ticker.history(period="2d")["Close"].iloc[0]
-        change = ((last_price - prev_close) / prev_close) * 100
-        return f"{last_price:.2f} ({change:+.2f}%)"
-    return "Hisse fiyat verisi alınamadı"
+    """Hisse verisi alınamazsa None döner"""
+    try:
+        ticker = yf.Ticker(f"{stockName}.IS")
+        data = ticker.history(period="1d", interval="1m")
+        if not data.empty:
+            last_price = data["Close"].iloc[-1]
+            prev_close = ticker.history(period="2d")["Close"].iloc[0]
+            change = ((last_price - prev_close) / prev_close) * 100
+            return f"{last_price:.2f} ({change:+.2f}%)"
+    except Exception as e:
+        print(f"Veri alınamadı: {stockName} -> {e}")
+        return None
+    return None
 
 def send_telegram(message):
     """Telegram mesajı gönder"""
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     for chat_id in CHAT_IDS:
-        requests.post(url, data={"chat_id": chat_id, "text": message, "parse_mode": "HTML" })
+        requests.post(url, data={"chat_id": chat_id, "text": message, "parse_mode": "HTML"})
 
 # --- Son kayıt sayısını dosyada tut ---
 def get_last_count():
@@ -120,10 +125,17 @@ if response.status_code == 200:
     if new_count == 0:
         send_telegram("Bugün için yeni KAP bildirimi yok ✅")
     elif new_count > last_count:
-        # sadece yeni gelenleri gönder
+        # publishDate'e göre sırala tüm veri (eski -> yeni)
+        for item in data:
+            item["publishDateParsed"] = datetime.strptime(item["publishDate"], "%d.%m.%Y %H:%M:%S")
+        data_sorted = sorted(data, key=lambda x: x["publishDateParsed"])
+
+        # Sadece en güncel yeni gelenleri al
         diff = new_count - last_count
-        new_items = data[-diff:]   # EN SON gelen bildirimleri al
-        for item in new_items:
+        new_items_sorted = data_sorted[-diff:]  # en güncel diff kadar
+
+        # sırayla gönder
+        for item in new_items_sorted:
             stock = item.get("stockCodes") or item.get("relatedStocks") or ""
             stockCode = stock[:5]
             if "THYAO" in stock:
@@ -137,8 +149,9 @@ if response.status_code == 200:
 
             message = (
                 f"📢 {stock}\n\n"
-                f"🔹 {title}\n\n"
+                f"🔹 {title}\n\n" 
                 f"📄 {summary} \n\n"
+                f"🕒 {item['publishDate']}\n\n"
                 f"🔗 <a href='{link}'>Bildirimi Görüntüle</a> \n\n"
                 f"📊 Bist100 : {xu100_info} \n\n"
                 f"📊 {stockCode} : {stock_info}"
@@ -149,5 +162,6 @@ if response.status_code == 200:
         set_last_count(new_count)
     else:
         print("Yeni bildirim yok, telegrama mesaj gönderilmedi.")
+
 else:
     send_telegram(f"KAP verisi alınamadı! Status Code: {response.status_code}")
