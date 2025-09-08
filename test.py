@@ -24,7 +24,7 @@ def set_last_count(count):
 
 # --- KAP verisi çekme ---
 #today = date.today().strftime("%Y-%m-%d")
-today = (date.today() - timedelta(days=2)).strftime("%Y-%m-%d")
+today = date.today().strftime("%Y-%m-%d")
 url = "https://www.kap.org.tr/tr/api/disclosure/members/byCriteria"
 
 payload = {
