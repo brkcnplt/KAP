@@ -5,7 +5,11 @@ import yfinance as yf
 
 # --- Telegram ayarları ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "8153163023:AAF6TyciGLkjCmr8oXq1hQEO50ahMsGpRmA")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1642459289")
+#CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1642459289")
+CHAT_IDS = [
+    os.environ.get("TELEGRAM_CHAT_ID", "1642459289"),
+    "851287347",   # ikinci chat_id buraya
+]
 
 today = date.today().strftime("%Y-%m-%d")
 
@@ -36,7 +40,8 @@ def get_stockValue(stockName):
 def send_telegram(message):
     """Telegram mesajı gönder"""
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML" })
+    for chat_id in CHAT_IDS:
+        requests.post(url, data={"chat_id": chat_id, "text": message, "parse_mode": "HTML" })
 
 # --- Son kayıt sayısını dosyada tut ---
 def get_last_count():
