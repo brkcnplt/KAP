@@ -12,30 +12,6 @@ CHAT_IDS = [
 
 today = date.today().strftime("%Y-%m-%d")
 
-def get_xu100():
-    ticker = yf.Ticker("XU100.IS")
-    data = ticker.history(period="1d", interval="1m")
-    if not data.empty:
-        last_price = data["Close"].iloc[-1]
-        prev_close = ticker.history(period="2d")["Close"].iloc[0]
-        change = ((last_price - prev_close) / prev_close) * 100
-        return f"({change:+.2f}%)"
-    return "XU100 verisi alınamadı"
-
-def get_stockValue(stockName):
-    """Hisse verisi alınamazsa None döner"""
-    try:
-        ticker = yf.Ticker(f"{stockName}.IS")
-        data = ticker.history(period="1d", interval="1m")
-        if not data.empty:
-            last_price = data["Close"].iloc[-1]
-            prev_close = ticker.history(period="2d")["Close"].iloc[0]
-            change = ((last_price - prev_close) / prev_close) * 100
-            return f"{last_price:.2f} ({change:+.2f}%)"
-    except Exception as e:
-        print(f"Veri alınamadı: {stockName} -> {e}")
-        return None
-    return None
 
 def send_telegram(message):
     """Telegram mesajı gönder"""
@@ -120,7 +96,6 @@ if response.status_code == 200:
     last_count = get_last_count()
     print(f"Yeni KAP bildirimi sayısı: {new_count}, Son kayıtlı bildirim sayısı: {last_count}")
 
-    xu100_info = get_xu100()
 
     if new_count == 0:
         send_telegram("Bugün için yeni KAP bildirimi yok ✅")
@@ -140,7 +115,6 @@ if response.status_code == 200:
             stockCode = stock[:5]
             if "THYAO" in stock:
                 stockCode = "THYAO"
-            stock_info = get_stockValue(stockCode)
 
             title = item.get("summary") or ""
             summary = item.get("subject") or ""
@@ -153,8 +127,6 @@ if response.status_code == 200:
                 f"📄 {summary} \n\n"
                 f"🕒 {item['publishDate']}\n\n"
                 f"🔗 <a href='{link}'>Bildirimi Görüntüle</a> \n\n"
-                f"📊 Bist100 : {xu100_info} \n\n"
-                f"📊 {stockCode} : {stock_info}"
             )
             send_telegram(message)
 
