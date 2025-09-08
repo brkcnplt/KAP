@@ -7,6 +7,8 @@ import yfinance as yf
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "8153163023:AAF6TyciGLkjCmr8oXq1hQEO50ahMsGpRmA")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1642459289")
 
+today = date.today().strftime("%Y-%m-%d")
+
 def get_xu100():
     ticker = yf.Ticker("XU100.IS")
     data = ticker.history(period="1d", interval="1m")
@@ -59,7 +61,6 @@ def set_last_count(count):
 
 # --- KAP verisi çekme ---
 #today = date.today().strftime("%Y-%m-%d")
-today = date.today().strftime("%Y-%m-%d")
 url = "https://www.kap.org.tr/tr/api/disclosure/members/byCriteria"
 
 payload = {
