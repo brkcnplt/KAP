@@ -1,14 +1,13 @@
 import requests
-from datetime import date, timedelta
+from datetime import date
 import os
 import yfinance as yf
 
 # --- Telegram ayarları ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "8153163023:AAF6TyciGLkjCmr8oXq1hQEO50ahMsGpRmA")
-#CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1642459289")
 CHAT_IDS = [
     os.environ.get("TELEGRAM_CHAT_ID", "1642459289"),
-    "851287347",   # ikinci chat_id buraya
+    "851287347",   # ikinci chat_id
 ]
 
 today = date.today().strftime("%Y-%m-%d")
@@ -23,10 +22,8 @@ def get_xu100():
         return f"({change:+.2f}%)"
     return "XU100 verisi alınamadı"
 
-
 def get_stockValue(stockName):
     ticker = yf.Ticker(f"{stockName}.IS")
-    print("ticker:", {ticker})
     data = ticker.history(period="1d", interval="1m")
     if not data.empty:
         last_price = data["Close"].iloc[-1]
@@ -34,8 +31,6 @@ def get_stockValue(stockName):
         change = ((last_price - prev_close) / prev_close) * 100
         return f"{last_price:.2f} ({change:+.2f}%)"
     return "Hisse fiyat verisi alınamadı"
-
-
 
 def send_telegram(message):
     """Telegram mesajı gönder"""
@@ -53,7 +48,6 @@ def get_last_count():
                 parts = content.split(",")
                 if len(parts) == 2:
                     last_date, last_count = parts
-                    # Eğer dosyadaki tarih bugünden farklıysa -> sıfırla
                     if last_date != today:
                         return 0
                     return int(last_count)
@@ -65,7 +59,6 @@ def set_last_count(count):
         f.write(f"{today},{count}")
 
 # --- KAP verisi çekme ---
-#today = date.today().strftime("%Y-%m-%d")
 url = "https://www.kap.org.tr/tr/api/disclosure/members/byCriteria"
 
 payload = {
@@ -120,7 +113,6 @@ if response.status_code == 200:
     data = response.json() or []
     new_count = len(data)
     last_count = get_last_count()
-    #new_count = last_count + 1 #will be change
     print(f"Yeni KAP bildirimi sayısı: {new_count}, Son kayıtlı bildirim sayısı: {last_count}")
 
     xu100_info = get_xu100()
@@ -129,10 +121,10 @@ if response.status_code == 200:
         send_telegram("Bugün için yeni KAP bildirimi yok ✅")
     elif new_count > last_count:
         # sadece yeni gelenleri gönder
-        new_items = data[:new_count - last_count]
+        diff = new_count - last_count
+        new_items = data[-diff:]   # EN SON gelen bildirimleri al
         for item in new_items:
             stock = item.get("stockCodes") or item.get("relatedStocks") or ""
-
             stockCode = stock[:5]
             if "THYAO" in stock:
                 stockCode = "THYAO"
@@ -142,15 +134,20 @@ if response.status_code == 200:
             summary = item.get("subject") or ""
             bildirimNo = item.get("disclosureIndex") or ""
             link = f"https://www.kap.org.tr/tr/Bildirim/{bildirimNo}"
-            message = f"📢 {stock}\n\n🔹 {title}\n\n📄 {summary} \n\n 🔗 <a href='{link}'>Bildirimi Görüntüle</a> \n\n 📊 Bist100 : {xu100_info} \n\n 📊 {stockCode} : {stock_info}"
+
+            message = (
+                f"📢 {stock}\n\n"
+                f"🔹 {title}\n\n"
+                f"📄 {summary} \n\n"
+                f"🔗 <a href='{link}'>Bildirimi Görüntüle</a> \n\n"
+                f"📊 Bist100 : {xu100_info} \n\n"
+                f"📊 {stockCode} : {stock_info}"
+            )
             send_telegram(message)
 
         # sayıyı güncelle
         set_last_count(new_count)
     else:
-        # hiç değişiklik yok
-        message = f"📢 değişiklik yok, bildirim sayısı: {new_count}"
-        #send_telegram(message)
         print("Yeni bildirim yok, telegrama mesaj gönderilmedi.")
 else:
     send_telegram(f"KAP verisi alınamadı! Status Code: {response.status_code}")
