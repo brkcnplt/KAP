@@ -144,7 +144,7 @@ if response.status_code == 200:
     else:
         # hiç değişiklik yok
         message = f"📢 değişiklik yok, bildirim sayısı: {new_count}"
-        send_telegram(message)
+        #send_telegram(message)
         print("Yeni bildirim yok, telegrama mesaj gönderilmedi.")
 else:
     send_telegram(f"KAP verisi alınamadı! Status Code: {response.status_code}")
