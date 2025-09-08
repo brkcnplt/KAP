@@ -2,7 +2,7 @@ name: KAP Bot Notification
 
 on:
   schedule:
-    # Her 10 dakikada bir çalışacak
+    # Her 10 dakikada bir, hafta içi 06:00–15:59 arası çalışacak
     - cron: "*/10 6-15 * * 1-5"
   workflow_dispatch: # manuel tetikleme için
 
@@ -14,16 +14,22 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v3
 
+    - name: Load last_count cache
+      uses: actions/cache@v3
+      with:
+        path: last_count.txt
+        key: kap-bot-last-count
+        restore-keys: kap-bot-last-count
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: 3.11
+        python-version: "3.11"
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-         pip install requests tabulate yfinance
-         
+        pip install requests tabulate yfinance
 
     - name: Run KAP bot
       env:
