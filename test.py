@@ -13,14 +13,24 @@ def send_telegram(message):
 
 # --- Son kayıt sayısını dosyada tut ---
 def get_last_count():
+    """Dosyadan son kayıtlı sayıyı oku, eğer gün değiştiyse sıfırla"""
     if os.path.exists("last_count.txt"):
         with open("last_count.txt", "r") as f:
-            return int(f.read().strip() or 0)
+            content = f.read().strip()
+            if content:
+                parts = content.split(",")
+                if len(parts) == 2:
+                    last_date, last_count = parts
+                    # Eğer dosyadaki tarih bugünden farklıysa -> sıfırla
+                    if last_date != today:
+                        return 0
+                    return int(last_count)
     return 0
 
 def set_last_count(count):
+    """Bugünün tarihiyle birlikte son kayıt sayısını dosyaya yaz"""
     with open("last_count.txt", "w") as f:
-        f.write(str(count))
+        f.write(f"{today},{count}")
 
 # --- KAP verisi çekme ---
 #today = date.today().strftime("%Y-%m-%d")
