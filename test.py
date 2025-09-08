@@ -6,6 +6,30 @@ import os
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "8153163023:AAF6TyciGLkjCmr8oXq1hQEO50ahMsGpRmA")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1642459289")
 
+def get_xu100():
+    ticker = yf.Ticker("XU100.IS")
+    data = ticker.history(period="1d", interval="1m")
+    if not data.empty:
+        last_price = data["Close"].iloc[-1]
+        prev_close = ticker.history(period="2d")["Close"].iloc[0]
+        change = ((last_price - prev_close) / prev_close) * 100
+        return f"XU100: {last_price:.2f} ({change:+.2f}%)"
+    return "XU100 verisi alınamadı"
+
+
+def get_stockValue(stockName):
+    ticker = yf.Ticker(f"{stockName}.IS")
+    print("ticker:", {ticker})
+    data = ticker.history(period="1d", interval="1m")
+    if not data.empty:
+        last_price = data["Close"].iloc[-1]
+        prev_close = ticker.history(period="2d")["Close"].iloc[0]
+        change = ((last_price - prev_close) / prev_close) * 100
+        return f"{last_price:.2f} ({change:+.2f}%)"
+    return "Hisse fiyat verisi alınamadı"
+
+
+
 def send_telegram(message):
     """Telegram mesajı gönder"""
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -92,6 +116,8 @@ if response.status_code == 200:
     #new_count = last_count + 1 #will be change
     print(f"Yeni KAP bildirimi sayısı: {new_count}, Son kayıtlı bildirim sayısı: {last_count}")
 
+    xu100_info = get_xu100()
+
     if new_count == 0:
         send_telegram("Bugün için yeni KAP bildirimi yok ✅")
     elif new_count > last_count:
@@ -99,11 +125,17 @@ if response.status_code == 200:
         new_items = data[:new_count - last_count]
         for item in new_items:
             stock = item.get("stockCodes") or item.get("relatedStocks") or ""
+
+            stockCode = stock[:5]
+            if "THYAO" in stock:
+                stockCode = "THYAO"
+            stock_info = get_stockValue(stockCode)
+
             title = item.get("summary") or ""
             summary = item.get("subject") or ""
             bildirimNo = item.get("disclosureIndex") or ""
             link = f"https://www.kap.org.tr/tr/Bildirim/{bildirimNo}"
-            message = f"📢 {stock}\n\n🔹 {title}\n\n📄 {summary} \n\n 🔗 <a href='{link}'>Bildirimi Görüntüle</a>"
+            message = f"📢 {stock}\n\n🔹 {title}\n\n📄 {summary} \n\n 🔗 <a href='{link}'>Bildirimi Görüntüle</a> \n\n 📊 Bist100 : {xu100_info} \n\n 📊 {stockCode} : {stock_info}"
             send_telegram(message)
 
         # sayıyı güncelle
