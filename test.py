@@ -14,7 +14,7 @@ def get_xu100():
         last_price = data["Close"].iloc[-1]
         prev_close = ticker.history(period="2d")["Close"].iloc[0]
         change = ((last_price - prev_close) / prev_close) * 100
-        return f"XU100: {last_price:.2f} ({change:+.2f}%)"
+        return f"({change:+.2f}%)"
     return "XU100 verisi alınamadı"
 
 
