@@ -1,6 +1,7 @@
 import requests
 from datetime import date, timedelta
 import os
+import yfinance as yf
 
 # --- Telegram ayarları ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "8153163023:AAF6TyciGLkjCmr8oXq1hQEO50ahMsGpRmA")
