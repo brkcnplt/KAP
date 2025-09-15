@@ -1,15 +1,11 @@
 import requests
-from datetime import date, datetime , timedelta
+from datetime import date, datetime
 import os
 import sqlite3
-from collections import OrderedDict
-from contextlib import contextmanager
-from typing import IO, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Union
 from dotenv import load_dotenv 
 
 # --- Telegram ayarları ---
 load_dotenv()  # .env dosyasını yükler
-
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
@@ -25,62 +21,51 @@ if not TELEGRAM_CHAT_ID2:
 
 CHAT_IDS = [TELEGRAM_CHAT_ID1, TELEGRAM_CHAT_ID2]
 
-
-
 today = date.today().strftime("%Y-%m-%d")
 
-
-
-def send_telegram(message):
+def send_telegram(message: str):
     """Telegram mesajı gönder"""
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     for chat_id in CHAT_IDS:
-        requests.post(url, data={"chat_id": chat_id, "text": message, "parse_mode": "HTML"})
+        response = requests.post(url, data={"chat_id": chat_id, "text": message, "parse_mode": "HTML"})
         print(response.status_code, response.text)
 
 # --- DB bağlantısı ---
 DB_FILE = "kap_records.db"
 
 def init_db():
-    """Tabloyu oluştur (yoksa)"""
+    """Tabloları oluştur (yoksa)"""
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
+
+    # Gönderilmiş bildirimler
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS kap_counts (
-            record_date TEXT PRIMARY KEY,
-            count INTEGER
+        CREATE TABLE IF NOT EXISTS sent_disclosures (
+            disclosure_id TEXT PRIMARY KEY,
+            stock_code TEXT,
+            publish_date TEXT
         )
     """)
     conn.commit()
     conn.close()
 
-def clear_db():
-    """DB'deki tüm kayıtları sil"""
+def is_sent(disclosure_id: str) -> bool:
+    """Bu bildirim daha önce gönderilmiş mi?"""
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
-    cur.execute("DELETE FROM kap_counts")
-    conn.commit()
-    conn.close()
-    print("✅ DB'deki tüm kayıtlar silindi.")
-
-def get_db_count():
-    """Bugün için kayıtlı KAP sayısını getir"""
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute("SELECT count FROM kap_counts WHERE record_date = ?", (today,))
+    cur.execute("SELECT 1 FROM sent_disclosures WHERE disclosure_id = ?", (disclosure_id,))
     row = cur.fetchone()
     conn.close()
-    return row[0] if row else 0
+    return row is not None
 
-def set_db_count(count):
-    """Bugün için KAP sayısını kaydet/güncelle"""
+def mark_as_sent(disclosure_id: str, stock_code: str, publish_date: str):
+    """Bildirimi DB'ye ekle (gönderildi olarak işaretle)"""
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO kap_counts (record_date, count)
-        VALUES (?, ?)
-        ON CONFLICT(record_date) DO UPDATE SET count = excluded.count
-    """, (today, count))
+        INSERT OR IGNORE INTO sent_disclosures (disclosure_id, stock_code, publish_date)
+        VALUES (?, ?, ?)
+    """, (disclosure_id, stock_code, publish_date))
     conn.commit()
     conn.close()
 
@@ -132,60 +117,55 @@ headers = {
     "Content-Type": "application/json",
     "User-Agent": "Mozilla/5.0"
 }
-#clear_db()  # test amaçlı DB'yi temizle
-init_db()  # tabloyu hazırla
+
+# DB hazırla
+init_db()
+
 response = requests.post(url, headers=headers, json=payload)
 
 # --- Gelen veriyi işleme ---
 if response.status_code == 200:
     data = response.json() or []
-    new_count = len(data)
-    last_count = get_db_count()
-    print(f"Yeni KAP bildirimi sayısı: {new_count}, DB'deki sayı: {last_count}")
 
-    if new_count == last_count:
-        print("Bugün için aynı sayıda kayıt var, işlem yapılmadı ✅")
-    elif new_count > last_count:
-        # publishDate'e göre sırala
-        for item in data:
-            item["publishDateParsed"] = datetime.strptime(item["publishDate"], "%d.%m.%Y %H:%M:%S")
-        data_sorted = sorted(data, key=lambda x: x["publishDateParsed"])
+    for item in data:
+        disclosure_id = str(item.get("disclosureIndex"))
+        if not disclosure_id:
+            continue
 
-        diff = new_count - last_count
-        new_items_sorted = data_sorted[-diff:]
+        # Daha önce gönderilmiş mi kontrol et
+        if is_sent(disclosure_id):
+            print(f"⏭ Bildirim zaten gönderilmiş: {disclosure_id}")
+            continue
 
-        for item in new_items_sorted:
-            stock = item.get("stockCodes") or item.get("relatedStocks") or ""
-            stockCode = stock[:5]
-            # 🚨 ISMEN için mesaj gönderme
-            if "ISMEN" in stock:
-                print("⏭ ISMEN bildirimi atlandı.")
-                continue
+        stock = item.get("stockCodes") or item.get("relatedStocks") or ""
+        stockCode = stock[:5]
 
-            if "THYAO" in stock:
-                stockCode = "THYAO"
+        # 🚨 ISMEN için mesaj gönderme
+        if "ISMEN" in stock:
+            print("⏭ ISMEN bildirimi atlandı.")
+            mark_as_sent(disclosure_id, stockCode, item["publishDate"])
+            continue
 
-            title = item.get("summary") or ""
-            summary = item.get("subject") or ""
-            bildirimNo = item.get("disclosureIndex") or ""
-            link = f"https://www.kap.org.tr/tr/Bildirim/{bildirimNo}"
+        if "THYAO" in stock:
+            stockCode = "THYAO"
 
-            message = (
-                f"📢 {stock}\n\n"
-                f"🔹 {title}\n\n" 
-                f"📄 {summary} \n\n"
-                f"🕒 {item['publishDate']}\n\n"
-                f"🔗 <a href='{link}'>Bildirimi Görüntüle</a> \n\n"
+        title = item.get("summary") or ""
+        summary = item.get("subject") or ""
+        link = f"https://www.kap.org.tr/tr/Bildirim/{disclosure_id}"
 
-            
-            )
-            print(message)
-            send_telegram(message)
+        message = (
+            f"📢 {stock}\n\n"
+            f"🔹 {title}\n\n" 
+            f"📄 {summary} \n\n"
+            f"🕒 {item['publishDate']}\n\n"
+            f"🔗 <a href='{link}'>Bildirimi Görüntüle</a> \n\n"
+        )
 
-        # DB güncelle
-        set_db_count(new_count)
-    else:
-        print("DB'deki sayı API'den büyük görünüyor (tutarsızlık).")
+        print(f"📤 Yeni bildirim gönderiliyor: {disclosure_id}")
+        send_telegram(message)
+
+        # DB'ye kaydet
+        mark_as_sent(disclosure_id, stockCode, item["publishDate"])
 
 else:
     send_telegram(f"KAP verisi alınamadı! Status Code: {response.status_code}")
