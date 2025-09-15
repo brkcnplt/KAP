@@ -14,12 +14,13 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v3
 
-    - name: Load last_count cache
+    - name: Cache DB
       uses: actions/cache@v3
       with:
-        path: last_count.txt
-        key: kap-bot-last-count
-        restore-keys: kap-bot-last-count
+        path: kap_records.db
+        key: kap-bot-db
+        restore-keys: kap-bot-db
+
 
     - name: Set up Python
       uses: actions/setup-python@v4
