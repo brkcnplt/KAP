@@ -42,7 +42,7 @@ jobs:
 
     # Güncellenmiş DB'yi tekrar yükle
     - name: Upload DB artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: kap-db
         path: kap_records.db
