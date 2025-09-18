@@ -123,43 +123,50 @@ response = requests.post(url, headers=headers, json=payload)
 if response.status_code == 200:
     data = response.json() or []
 
-    # publishDate'e göre sırala
-    for item in data:
-        item["publishDateParsed"] = datetime.strptime(item["publishDate"], "%d.%m.%Y %H:%M:%S")
-    data_sorted = sorted(data, key=lambda x: x["publishDateParsed"])
+    for idx, item in enumerate(data_sorted):
+    disclosure_id = str(item.get("disclosureIndex"))
+    if not disclosure_id:
+        continue
 
-    for item in data_sorted:
-        disclosure_id = str(item.get("disclosureIndex"))
-        if not disclosure_id:
+    # daha önce gönderilmişse pas geç
+    if is_disclosure_sent(disclosure_id):
+        continue
+
+    stock = item.get("stockCodes") or item.get("relatedStocks") or ""
+    if "ISMEN" in stock:
+        print("⏭ ISMEN bildirimi atlandı.")
+        continue
+
+    if "THYAO" in stock:
+        stock = "THYAO"
+
+    title = item.get("summary") or ""
+    summary = item.get("subject") or ""
+    publish_date = item["publishDate"]
+    publish_date_parsed = datetime.strptime(publish_date, "%d.%m.%Y %H:%M:%S")
+    link = f"https://www.kap.org.tr/tr/Bildirim/{disclosure_id}"
+
+    # 🔍 Bir SONRAKİ bildirimin publish_date farkını kontrol et
+    if idx + 1 < len(data_sorted):
+        next_item = data_sorted[idx + 1]
+        next_publish_date = datetime.strptime(next_item["publishDate"], "%d.%m.%Y %H:%M:%S")
+
+        if (next_publish_date - publish_date_parsed).total_seconds() > 20 * 60:
+            print(f"⏭ {disclosure_id} bildirimi sonraki ile arasında >20 dk olduğu için atlandı.")
             continue
 
-        # daha önce gönderilmişse pas geç
-        if is_disclosure_sent(disclosure_id):
-            continue
+    # Eğer atlanmadıysa gönder
+    message = (
+        f"📢 {stock}\n\n"
+        f"🔹 {title}\n\n"
+        f"📄 {summary}\n\n"
+        f"🕒 {publish_date}\n\n"
+        f"🔗 <a href='{link}'>Bildirimi Görüntüle</a>\n\n"
+    )
 
-        stock = item.get("stockCodes") or item.get("relatedStocks") or ""
-        if "ISMEN" in stock:
-            print("⏭ ISMEN bildirimi atlandı.")
-            continue
+    send_telegram(message)
+    save_disclosure(disclosure_id, publish_date, stock, title, summary)
 
-        if "THYAO" in stock:
-            stock = "THYAO"
-
-        title = item.get("summary") or ""
-        summary = item.get("subject") or ""
-        publish_date = item["publishDate"]
-        link = f"https://www.kap.org.tr/tr/Bildirim/{disclosure_id}"
-
-        message = (
-            f"📢 {stock}\n\n"
-            f"🔹 {title}\n\n"
-            f"📄 {summary}\n\n"
-            f"🕒 {publish_date}\n\n"
-            f"🔗 <a href='{link}'>Bildirimi Görüntüle</a>\n\n"
-        )
-
-        send_telegram(message)
-        save_disclosure(disclosure_id, publish_date, stock, title, summary)
 
 else:
     send_telegram(f"KAP verisi alınamadı! Status Code: {response.status_code}")
