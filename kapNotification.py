@@ -123,6 +123,7 @@ response = requests.post(url, headers=headers, json=payload)
 if response.status_code == 200:
     data = response.json() or []
 
+    #i. bildirime bak → (publish_date[i+1] - publish_date[i]) > 20 dk mı? → evetse i’yi atla
     for idx, item in enumerate(data_sorted):
     disclosure_id = str(item.get("disclosureIndex"))
     if not disclosure_id:
