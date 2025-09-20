@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
 import requests
 from datetime import date, datetime
 import os
 import sqlite3
-from dotenv import load_dotenv 
+from dotenv import load_dotenv
+import json
 
 # --- Telegram ayarları ---
 load_dotenv()  # .env dosyasını yükler
@@ -14,11 +16,11 @@ if not TOKEN:
 TELEGRAM_CHAT_ID1 = os.getenv("TELEGRAM_CHAT_ID1")
 TELEGRAM_CHAT_ID2 = os.getenv("TELEGRAM_CHAT_ID2")
 
-CHAT_IDS = [TELEGRAM_CHAT_ID1, TELEGRAM_CHAT_ID2]
+# boş/None chat id'leri atla
+CHAT_IDS = [c for c in (TELEGRAM_CHAT_ID1, TELEGRAM_CHAT_ID2) if c]
 
 today = date.today().strftime("%Y-%m-%d")
 DB_FILE = "kap_records.db"
-
 
 # --- DB Fonksiyonları ---
 def init_db():
@@ -54,19 +56,26 @@ def save_disclosure(disclosure_id, publish_date, stock, title, summary):
     conn.commit()
     conn.close()
 
-
 # --- Telegram ---
 def send_telegram(message):
-    """Telegram mesajı gönder"""
+    """Telegram mesajı gönder (CHAT_IDS içinde None varsa atlanır)"""
+    if not CHAT_IDS:
+        print("Uyarı: Telegram chat ID bulunmuyor, mesaj gönderilemiyor.")
+        return
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     for chat_id in CHAT_IDS:
-        response = requests.post(url, data={
-            "chat_id": chat_id,
-            "text": message,
-            "parse_mode": "HTML"
-        })
-        print(response.status_code, response.text)
-
+        try:
+            response = requests.post(url, data={
+                "chat_id": chat_id,
+                "text": message,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True
+            }, timeout=15)
+            print(f"Telegram -> {chat_id}: {response.status_code}")
+            # isteğe bağlı olarak response.text yazdırılabilir:
+            # print(response.text)
+        except Exception as e:
+            print(f"Telegram gönderim hatası ({chat_id}): {e}")
 
 # --- KAP API ---
 url = "https://www.kap.org.tr/tr/api/disclosure/members/byCriteria"
@@ -118,56 +127,111 @@ headers = {
 
 # --- Çalıştır ---
 init_db()
-response = requests.post(url, headers=headers, json=payload)
+response = requests.post(url, headers=headers, json=payload, timeout=30)
 
 if response.status_code == 200:
-    data = response.json() or []
+    raw = response.json() or {}
 
-    #i. bildirime bak → (publish_date[i+1] - publish_date[i]) > 20 dk mı? → evetse i’yi atla
-    for idx, item in enumerate(data_sorted):
-    disclosure_id = str(item.get("disclosureIndex"))
-    if not disclosure_id:
-        continue
+    # API cevap formatına göre listeyi tespit et
+    items = []
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, dict):
+        # yaygın alan isimlerini dene
+        if "data" in raw and isinstance(raw["data"], list):
+            items = raw["data"]
+        elif "items" in raw and isinstance(raw["items"], list):
+            items = raw["items"]
+        else:
+            # dict içinde ilk list değerini al
+            for v in raw.values():
+                if isinstance(v, list):
+                    items = v
+                    break
 
-    # daha önce gönderilmişse pas geç
-    if is_disclosure_sent(disclosure_id):
-        continue
+    if not items:
+        print("KAP'dan dönen veri içinde bildirim listesi bulunamadı. Response örneği:")
+        print(json.dumps(raw, indent=2, ensure_ascii=False)[:2000])
+    else:
+        # publishDate parse fonksiyonu
+        def parse_publish(item):
+            pd = item.get("publishDate") or item.get("publish_date") or ""
+            try:
+                return datetime.strptime(pd, "%d.%m.%Y %H:%M:%S")
+            except Exception:
+                return datetime.min
 
-    stock = item.get("stockCodes") or item.get("relatedStocks") or ""
-    if "ISMEN" in stock:
-        print("⏭ ISMEN bildirimi atlandı.")
-        continue
+        # kronolojik sıraya koy (eski -> yeni)
+        data_sorted = sorted(items, key=parse_publish)
 
-    if "THYAO" in stock:
-        stock = "THYAO"
+        for idx, item in enumerate(data_sorted):
+            # -- gerekli alanlar --
+            disclosure_id = str(item.get("disclosureIndex") or item.get("disclosure_id") or item.get("id") or "").strip()
+            if not disclosure_id:
+                print(f"[{idx}] Uyarı: disclosure_id yok, atlanıyor.")
+                continue
 
-    title = item.get("summary") or ""
-    summary = item.get("subject") or ""
-    publish_date = item["publishDate"]
-    publish_date_parsed = datetime.strptime(publish_date, "%d.%m.%Y %H:%M:%S")
-    link = f"https://www.kap.org.tr/tr/Bildirim/{disclosure_id}"
+            # daha önce gönderilmişse pas geç
+            if is_disclosure_sent(disclosure_id):
+                # print(f"{disclosure_id} daha önce gönderilmiş.")
+                continue
 
-    # 🔍 Bir SONRAKİ bildirimin publish_date farkını kontrol et
-    if idx + 1 < len(data_sorted):
-        next_item = data_sorted[idx + 1]
-        next_publish_date = datetime.strptime(next_item["publishDate"], "%d.%m.%Y %H:%M:%S")
+            # stock field'larını normalize et
+            stock_field = item.get("stockCodes") or item.get("relatedStocks") or item.get("stock") or ""
+            if isinstance(stock_field, list):
+                stock_str = ",".join(stock_field)
+            else:
+                stock_str = str(stock_field)
 
-        if (next_publish_date - publish_date_parsed).total_seconds() > 20 * 60:
-            print(f"⏭ {disclosure_id} bildirimi sonraki ile arasında >20 dk olduğu için atlandı.")
-            continue
+            # ISMEN bildirimi atlamak istemişsin
+            if "ISMEN" in stock_str:
+                print(f"⏭ {disclosure_id} (ISMEN) bildirimi atlandı.")
+                continue
 
-    # Eğer atlanmadıysa gönder
-    message = (
-        f"📢 {stock}\n\n"
-        f"🔹 {title}\n\n"
-        f"📄 {summary}\n\n"
-        f"🕒 {publish_date}\n\n"
-        f"🔗 <a href='{link}'>Bildirimi Görüntüle</a>\n\n"
-    )
+            # THY kodu düzeltmesi
+            if "THYAO" in stock_str or "THYAO" in stock_str.upper():
+                stock_str = "THYAO"
 
-    send_telegram(message)
-    save_disclosure(disclosure_id, publish_date, stock, title, summary)
+            # başlık/özet
+            title = item.get("title") or item.get("summary") or item.get("subject") or ""
+            summary = item.get("summary") or item.get("subject") or ""
 
+            publish_date = item.get("publishDate") or ""
+            try:
+                publish_date_parsed = datetime.strptime(publish_date, "%d.%m.%Y %H:%M:%S")
+            except Exception:
+                publish_date_parsed = None
+
+            link = f"https://www.kap.org.tr/tr/Bildirim/{disclosure_id}"
+
+            # 🔍 Bir SONRAKİ bildirimin publish_date farkını kontrol et (kronolojik sırada next daha yenidir)
+            if idx + 1 < len(data_sorted) and publish_date_parsed:
+                next_item = data_sorted[idx + 1]
+                next_publish_raw = next_item.get("publishDate") or ""
+                try:
+                    next_publish_date = datetime.strptime(next_publish_raw, "%d.%m.%Y %H:%M:%S")
+                    # eğer sonraki bildirimle aradaki fark > 20 dk ise atla
+                    if (next_publish_date - publish_date_parsed).total_seconds() > 20 * 60:
+                        print(f"⏭ {disclosure_id} bildirimi sonraki ile arasında >20 dk olduğu için atlandı.")
+                        continue
+                except Exception:
+                    # parse hatası olursa devam et
+                    pass
+
+            # Gönderilecek mesajı hazırla
+            message = (
+                f"📢 {stock_str}\n\n"
+                f"🔹 {title}\n\n"
+                f"📄 {summary}\n\n"
+                f"🕒 {publish_date}\n\n"
+                f"🔗 <a href='{link}'>Bildirimi Görüntüle</a>\n\n"
+            )
+
+            # gönder ve kaydet
+            send_telegram(message)
+            save_disclosure(disclosure_id, publish_date, stock_str, title, summary)
+            print(f"Gönderildi ve kaydedildi: {disclosure_id}")
 
 else:
     send_telegram(f"KAP verisi alınamadı! Status Code: {response.status_code}")
+    print("KAP isteği başarısız. Status:", response.status_code, response.text[:1000])
