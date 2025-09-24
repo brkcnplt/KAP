@@ -213,6 +213,7 @@ if response.status_code == 200:
                     # eğer sonraki bildirimle aradaki fark > 20 dk ise atla
                     if (next_publish_date - publish_date_parsed).total_seconds() > 20 * 60:
                         print(f"⏭ {disclosure_id} bildirimi sonraki ile arasında >20 dk olduğu için atlandı.")
+                        save_disclosure(disclosure_id, publish_date, stock_str, title, summary)  # ⬅️ DB’ye yine yaz
                         continue
                 except Exception:
                     # parse hatası olursa devam et
