@@ -31,7 +31,7 @@ if not TOKEN:
 TELEGRAM_CHAT_ID1 = os.getenv("TELEGRAM_CHAT_ID1")
 TELEGRAM_CHAT_ID2 = os.getenv("TELEGRAM_CHAT_ID2")
 
-CHAT_IDS = [c for c in (TELEGRAM_CHAT_ID1, TELEGRA M_CHAT_ID2) if c] if False else [c for c in (TELEGRAM_CHAT_ID1, TELEGRAM_CHAT_ID2) if c]  # safety fallback
+CHAT_IDS = [c for c in (TELEGRAM_CHAT_ID1, TELEGRAM_CHAT_ID2) if c] if False else [c for c in (TELEGRAM_CHAT_ID1, TELEGRAM_CHAT_ID2) if c]  # safety fallback
 
 today = date.today().strftime("%Y-%m-%d")
 DB_FILE = "kap_records.db"
