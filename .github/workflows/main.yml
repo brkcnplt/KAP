@@ -2,9 +2,12 @@ name: KAP Bot Notification
 
 on:
   schedule:
-    # Hafta içi, her 10 dakikada bir 06:00–15:59 arası
+    # Hafta içi 06:00–15:59 arası her 10 dakikada bir
     - cron: "*/10 6-15 * * 1-5"
   workflow_dispatch:
+
+permissions:
+  contents: write   # 🔑 Repo'ya push izni ver
 
 jobs:
   run-kap-bot:
