@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import json
 
 # --- Telegram ayarları ---
-load_dotenv()  # .env dosyasını yükler
+load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
@@ -156,23 +156,23 @@ def main():
         print("Uyarı: disclosure_id yok.")
         return
 
+    # --- En kritik kısım: Daha önce gönderildiyse çık ---
     if is_disclosure_sent(disclosure_id):
         print("Yeni bildirim yok.")
         return
 
+    # Stock normalizasyon
     stock_field = last_item.get("stockCodes") or last_item.get("relatedStocks") or last_item.get("stock") or ""
     if isinstance(stock_field, list):
         stock_str = ",".join(stock_field)
     else:
         stock_str = str(stock_field)
 
-    # ISMEN atla
     if "ISMEN" in stock_str:
         print(f"⏭ {disclosure_id} (ISMEN) bildirimi atlandı.")
         save_disclosure(disclosure_id, last_item.get("publishDate", ""), stock_str, "", "")
         return
 
-    # THYAO fix
     if "THYAO" in stock_str.upper():
         stock_str = "THYAO"
 
